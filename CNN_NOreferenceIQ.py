@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[380]:
+# In[1]:
 
 import os
 import glob
@@ -14,27 +14,29 @@ from keras.layers import Flatten
 from keras.layers.normalization import BatchNormalization
 from keras.layers.convolutional import Conv2D
 from keras.layers.convolutional import MaxPooling2D
-from keras.constraints import maxnorm
+#sets constraints (eg. non-negativity) on network parameters during optimization.
+from keras.constraints import maxnorm, MinMaxNorm
 from keras.optimizers import SGD
+from keras.optimizers import adam
 import pandas as pd
 import numpy as np
 from keras.preprocessing.image import array_to_img, img_to_array, load_img
 from sklearn.cross_validation import train_test_split
+from sklearn.metrics import mean_squared_error
 
 
-
-# In[381]:
+# In[2]:
 
 path_data = '/Users/jatin/Desktop/WirelessProject/DATASET/'
 mos_data = pd.read_csv(path_data + r'mos.txt', header = None)
 
 
-# In[384]:
+# In[3]:
 
-keras.backend.backend()
+#keras.backend.backend()
 
 
-# In[387]:
+# In[4]:
 
 '''Let's say you're working with 128x128 pixel RGB images (that's 128x128 pixels with 3 color channels).
 When you put such an image into a numpy array you can either store it with a shape of (128, 128, 3) 
@@ -45,43 +47,21 @@ or if it comes last (as with tensorflow / "tf").'''
 keras.backend.image_dim_ordering()
 
 
-# In[388]:
+# In[5]:
 
-def CNN():
-    model = Sequential()
-    #Input shape has to be rows, columns, channel (since image_dim_ordering is tf)
-    model.add(Conv2D(50, (7, 7), input_shape=(32, 32, 3),strides=(1, 1), padding='same', activation='relu'))
-    model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Flatten())
-    model.add(Dense(800, activation='relu', kernel_constraint=maxnorm(3)))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.5))
-    model.add(Dense(800, activation='relu', kernel_constraint=maxnorm(3)))
-    model.add(BatchNormalization())
-    model.add(Dropout(0.5))
-    model.add(Dense(1, kernel_initializer='normal'))
-    return model
+#model.summary()
 
 
-# In[405]:
-
-model.summary()
-
-
-# In[390]:
+# In[6]:
 
 epochs = 25
 lrate = 0.01
 decay = lrate/epochs
-sgd = SGD(lr=lrate, momentum=0.9, decay=decay, nesterov=False)
+sgd = SGD(lr=lrate, momentum=0.9, decay=decay, nesterov=False, clipvalue=0.5)
+#keras.optimizers.RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
 
 
-# In[412]:
-
-model.compile(loss='mse', optimizer="sgd")
-
-
-# In[413]:
+# In[7]:
 
 def get_im(path):
     '''loads image as PIL
@@ -96,7 +76,7 @@ def get_im(path):
     return img_to_array(resized)
 
 
-# In[445]:
+# In[8]:
 
 def load_train():
     X_train = []
@@ -110,17 +90,12 @@ def load_train():
     return X_train, y_train
 
 
-# In[446]:
+# In[9]:
 
 train, target = load_train()
 
 
-# In[447]:
-
-len(y_train)
-
-
-# In[448]:
+# In[10]:
 
 def split_validation_set(train, target, test_size):
     random_state = 51
@@ -128,17 +103,12 @@ def split_validation_set(train, target, test_size):
     return X_train, X_test, y_train, y_test
 
 
-# In[449]:
+# In[11]:
 
 X_train, X_test, y_train, y_test = split_validation_set(train, target, 0.2)
 
 
-# In[450]:
-
-len(X_test)
-
-
-# In[451]:
+# In[12]:
 
 X_train = np.array(X_train)
 X_test = np.array(X_test)
@@ -146,31 +116,107 @@ y_train = np.array(y_train)
 y_test = np.array(y_test)
 
 
-# In[452]:
+# In[13]:
 
-X_train.shape
+test_X = X_test[240:]
+test_y = y_test[240:]
 
 
-# In[453]:
+# In[14]:
+
+X_test = X_test[:240]
+y_test = y_test[:240]
+
+
+# In[15]:
+
+len(X_test)
+
+
+# In[16]:
 
 '''SHAPES: 1:rows 2: columns 3: channels | Thus, (0,3,1,2) means (no_of_samples, 3, 32, 32) and 
 (0,1,2,3) means (no_of_samples, 32, 32, 3)'''
-X_train = X_train.transpose(0,3,1,2)
-X_test = X_test.transpose(0,3,1,2)
+#X_train = X_train.transpose(0,3,1,2)
+#X_test = X_test.transpose(0,3,1,2)
 print (X_train.shape)
 
 
-# In[454]:
+# In[17]:
 
-X_train.shape
-
-
-# In[ ]:
-
-model.fit(X_train, y_train, batch_size=3, nb_epoch=3, verbose=1, validation_data=(X_test, y_test))
+#Input shape has to be rows, columns, channel (since image_dim_ordering is tf)
+input_shape = (32, 32, 3)
 
 
-# In[ ]:
+# In[18]:
+
+vgg_mean = np.array([123.68, 116.779, 103.939], dtype=np.float32).reshape((1,1,3))
+def vgg_preprocess(x):
+    x = x - vgg_mean
+    return x[:, ::-1]
 
 
+# In[19]:
+
+X_train = vgg_preprocess(X_train)
+X_test = vgg_preprocess(X_test)
+
+
+# In[20]:
+
+#Check if numpy array have NaN
+np.isnan(np.sum(X_train))
+
+
+# In[21]:
+
+not np.any(X_test)
+
+
+# In[22]:
+
+def CNN():
+    model = Sequential()
+    model.add(Conv2D(50, (1, 1), input_shape = input_shape, activation='relu'))
+    model.add(MaxPooling2D(pool_size=(2, 2)))
+    model.add(Flatten())
+    model.add(Dense(800, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.1))
+    model.add(Dense(800, activation='relu'))
+    model.add(BatchNormalization())
+    model.add(Dropout(0.1))
+    model.add(Dense(1, activation='linear'))
+    return model
+
+
+# In[23]:
+
+model = CNN()
+model.compile(loss='mse', optimizer=sgd)
+
+
+# In[24]:
+
+model.summary()
+
+
+# In[25]:
+
+model.fit(X_train, y_train, batch_size=128, nb_epoch=10, verbose=1, validation_data=(X_test, y_test))
+
+
+# In[26]:
+
+model.save_weights('tid2008.h5')
+
+
+# In[27]:
+
+res = model.predict(test_X)
+
+
+# In[28]:
+
+print (mean_squared_error(res, test_y))
 
