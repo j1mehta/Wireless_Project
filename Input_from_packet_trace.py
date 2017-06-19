@@ -20,6 +20,7 @@ with open(fname) as f:
 packetTrace = pd.read_csv(pktLossTrace_path, header = None, sep=';')
 
 content = [int(x.strip()) for x in content] 
+f_type = [int(x.strip()) for x in f_type] 
 
 #No of packets in each frame
 lst = [0] * nb_frames
